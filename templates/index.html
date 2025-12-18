@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐦</text></svg>">
 </head>
 <body>
     <!-- Name Entry Modal -->
@@ -17,60 +16,46 @@
                 <i class="fas fa-dove"></i>
                 <h1>Chat Nest</h1>
             </div>
-            <p class="tagline">Where conversations take flight</p>
-            <div class="input-group">
-                <input type="text" id="usernameInput" placeholder="Enter your name (2-20 chars)" maxlength="20" autocomplete="off">
-                <div class="error-message" id="usernameError"></div>
-            </div>
+            <p class="tagline">Simple real-time chat application</p>
+            <input type="text" id="usernameInput" placeholder="Enter your name (2-20 characters)" maxlength="20" autocomplete="off">
+            <div id="usernameError" class="error"></div>
             <button id="joinChatBtn" class="btn-primary">
-                <i class="fas fa-sign-in-alt"></i> Enter Chat Room
+                <i class="fas fa-sign-in-alt"></i> Join Chat
             </button>
-            <div class="connection-status">
-                <span id="connectionStatus">Connecting...</span>
-            </div>
         </div>
     </div>
 
     <!-- Main Chat Container -->
-    <div class="container" style="display: none;">
+    <div class="container">
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
-                <div class="logo">
-                    <i class="fas fa-dove"></i>
-                    <h2>Chat Nest</h2>
-                </div>
+                <h2><i class="fas fa-dove"></i> Chat Nest</h2>
                 <div class="online-status">
                     <span class="online-dot"></span>
                     <span id="onlineCount">0</span> online
                 </div>
-                <button id="mobileMenuBtn" class="mobile-menu-btn">
-                    <i class="fas fa-times"></i>
-                </button>
             </div>
 
             <div class="active-users">
-                <h3><i class="fas fa-users"></i> Active Users (<span id="userCount">0</span>)</h3>
-                <div class="users-container">
-                    <ul id="userList"></ul>
-                </div>
+                <h3><i class="fas fa-users"></i> Active Users</h3>
+                <ul id="userList"></ul>
             </div>
 
             <div class="features">
-                <h3><i class="fas fa-star"></i> Features</h3>
+                <h3><i class="fas fa-cog"></i> Features</h3>
                 <ul>
-                    <li><i class="fas fa-bolt"></i> Real-time chat</li>
-                    <li><i class="fas fa-image"></i> Photo sharing</li>
-                    <li><i class="fas fa-smile"></i> Emoji & GIF support</li>
-                    <li><i class="fas fa-search-plus"></i> Zoom photos</li>
-                    <li><i class="fas fa-cloud"></i> No downloads needed</li>
-                    <li><i class="fas fa-mobile-alt"></i> Mobile friendly</li>
+                    <li>Real-time messaging</li>
+                    <li>Photo sharing</li>
+                    <li>Emoji support</li>
+                    <li>Photo zoom</li>
+                    <li>Mobile friendly</li>
                 </ul>
             </div>
             
-            <div class="sidebar-footer">
-                <p>Connected as: <strong id="sidebarUsername"></strong></p>
-                <button id="sidebarLeaveBtn" class="btn-secondary btn-small">
+            <div class="user-info">
+                <p>Connected as: <strong id="sidebarUsername">-</strong></p>
+                <button id="leaveChatBtn" class="btn-secondary">
                     <i class="fas fa-sign-out-alt"></i> Leave Chat
                 </button>
             </div>
@@ -79,39 +64,21 @@
         <!-- Chat Area -->
         <div class="chat-area">
             <div class="chat-header">
-                <button id="mobileToggleBtn" class="mobile-toggle-btn">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <div class="room-info">
-                    <h2><i class="fas fa-comments"></i> Main Chat Room</h2>
-                    <p id="roomDescription">Welcome to Chat Nest! Start chatting with everyone.</p>
-                </div>
-                <div class="user-info">
-                    <div class="user-badge">
-                        <i class="fas fa-user"></i>
-                        <span id="currentUser"></span>
-                    </div>
-                    <button id="leaveChatBtn" class="btn-secondary">
-                        <i class="fas fa-sign-out-alt"></i> Leave
-                    </button>
+                <h2><i class="fas fa-comments"></i> Main Chat Room</h2>
+                <div class="current-user">
+                    <i class="fas fa-user"></i>
+                    <span id="currentUser">-</span>
                 </div>
             </div>
 
             <div class="messages-container" id="messagesContainer">
-                <!-- Welcome message -->
-                <div class="message system-message">
-                    <div class="message-header">
-                        <span><i class="fas fa-info-circle"></i> System</span>
-                        <span id="currentTime"></span>
-                    </div>
-                    <div class="message-content">
-                        Welcome to Chat Nest! Type a message below to start chatting.
-                    </div>
+                <div class="system-message">
+                    <p>Welcome to Chat Nest! Start chatting below.</p>
                 </div>
             </div>
 
             <!-- Typing Indicator -->
-            <div class="typing-indicator" id="typingIndicator" style="display: none;"></div>
+            <div class="typing-indicator" id="typingIndicator"></div>
 
             <!-- Message Input Area -->
             <div class="input-area">
@@ -125,22 +92,19 @@
                     <button id="gifBtn" class="tool-btn" title="GIF">
                         <i class="fas fa-file-image"></i>
                     </button>
-                    <button id="clearBtn" class="tool-btn" title="Clear">
-                        <i class="fas fa-eraser"></i>
-                    </button>
                     <input type="file" id="photoInput" accept="image/*" style="display: none;">
                 </div>
                 
-                <div class="message-input-wrapper">
-                    <textarea id="messageInput" placeholder="Type your message here..." rows="1" autocomplete="off"></textarea>
-                    <button id="sendBtn" class="btn-send" title="Send (Ctrl+Enter)">
-                        <i class="fas fa-paper-plane"></i>
+                <div class="message-input">
+                    <textarea id="messageInput" placeholder="Type your message here..." rows="2"></textarea>
+                    <button id="sendBtn" class="btn-send">
+                        <i class="fas fa-paper-plane"></i> Send
                     </button>
                 </div>
                 
-                <div class="upload-progress" id="uploadProgress" style="display: none;">
+                <div class="upload-progress" id="uploadProgress">
                     <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
+                        <div class="progress" id="progressFill"></div>
                     </div>
                     <span id="progressText">Uploading...</span>
                 </div>
@@ -151,20 +115,10 @@
     <!-- Emoji Picker -->
     <div class="emoji-picker" id="emojiPicker">
         <div class="emoji-header">
-            <span>Select Emoji</span>
+            <span>Emojis</span>
             <button id="closeEmojiBtn">&times;</button>
         </div>
-        <div class="emoji-categories">
-            <button class="emoji-category active" data-category="all">All</button>
-            <button class="emoji-category" data-category="smileys">😀</button>
-            <button class="emoji-category" data-category="people">👋</button>
-            <button class="emoji-category" data-category="nature">🐶</button>
-            <button class="emoji-category" data-category="food">🍕</button>
-            <button class="emoji-category" data-category="activity">⚽</button>
-        </div>
-        <div class="emoji-grid" id="emojiGrid">
-            <!-- Emojis will be added by JavaScript -->
-        </div>
+        <div class="emoji-grid" id="emojiGrid"></div>
     </div>
 
     <!-- Photo Viewer Modal -->
@@ -172,23 +126,15 @@
         <div class="photo-modal-content">
             <span class="close-photo">&times;</span>
             <div class="photo-controls">
-                <button id="zoomInBtn" class="photo-btn" title="Zoom In"><i class="fas fa-search-plus"></i></button>
-                <button id="zoomOutBtn" class="photo-btn" title="Zoom Out"><i class="fas fa-search-minus"></i></button>
-                <button id="resetZoomBtn" class="photo-btn" title="Reset Zoom"><i class="fas fa-sync-alt"></i></button>
-                <button id="downloadPhotoBtn" class="photo-btn" title="Download"><i class="fas fa-download"></i></button>
-                <button id="closePhotoBtn" class="photo-btn" title="Close"><i class="fas fa-times"></i></button>
+                <button id="zoomInBtn" title="Zoom In"><i class="fas fa-search-plus"></i></button>
+                <button id="zoomOutBtn" title="Zoom Out"><i class="fas fa-search-minus"></i></button>
+                <button id="resetZoomBtn" title="Reset"><i class="fas fa-sync-alt"></i></button>
+                <button id="downloadPhotoBtn" title="Download"><i class="fas fa-download"></i></button>
             </div>
-            <div class="photo-container">
-                <img id="viewedPhoto" src="" alt="Full size photo">
-            </div>
+            <img id="viewedPhoto" src="" alt="Photo">
             <div class="photo-info" id="photoInfo"></div>
         </div>
     </div>
-
-    <!-- Notification Sound (hidden audio element) -->
-    <audio id="notificationSound" preload="auto">
-        <source src="https://assets.mixkit.co/sfx/preview/mixkit-message-pop-alert-2354.mp3" type="audio/mpeg">
-    </audio>
 
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>

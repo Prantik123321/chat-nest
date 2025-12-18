@@ -13,7 +13,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-i
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
-# Store active users and messages (in production, use Redis)
+# Store active users and messages
 active_users = {}
 chat_messages = []
 MAX_MESSAGES = 1000
