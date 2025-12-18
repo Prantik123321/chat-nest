@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Nest - Real Time Chat</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+<body>
+    <!-- Name Entry Modal -->
+    <div id="nameModal" class="modal">
+        <div class="modal-content">
+            <div class="logo">
+                <i class="fas fa-dove"></i>
+                <h1>Chat Nest</h1>
+            </div>
+            <p class="tagline">Where conversations take flight</p>
+            <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="20" autocomplete="off">
+            <button id="joinChatBtn" class="btn-primary">
+                <i class="fas fa-sign-in-alt"></i> Enter Chat Room
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Chat Container -->
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-dove"></i>
+                    <h2>Chat Nest</h2>
+                </div>
+                <div class="online-status">
+                    <span class="online-dot"></span>
+                    <span id="onlineCount">0</span> online
+                </div>
+            </div>
+
+            <div class="active-users">
+                <h3><i class="fas fa-users"></i> Active Users</h3>
+                <ul id="userList"></ul>
+            </div>
+
+            <div class="features">
+                <h3><i class="fas fa-star"></i> Features</h3>
+                <ul>
+                    <li><i class="fas fa-comment"></i> Real-time chat</li>
+                    <li><i class="fas fa-image"></i> Photo sharing</li>
+                    <li><i class="fas fa-smile"></i> Emoji & GIF support</li>
+                    <li><i class="fas fa-search-plus"></i> Zoom photos</li>
+                    <li><i class="fas fa-bolt"></i> No downloads needed</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div class="chat-header">
+                <div class="room-info">
+                    <h2><i class="fas fa-comments"></i> Main Chat Room</h2>
+                    <p>Welcome to Chat Nest! Start chatting with everyone.</p>
+                </div>
+                <div class="user-info">
+                    <span id="currentUser"></span>
+                    <button id="leaveChatBtn" class="btn-secondary">
+                        <i class="fas fa-sign-out-alt"></i> Leave
+                    </button>
+                </div>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                <!-- Messages will appear here -->
+            </div>
+
+            <!-- Typing Indicator -->
+            <div class="typing-indicator" id="typingIndicator"></div>
+
+            <!-- Message Input Area -->
+            <div class="input-area">
+                <div class="input-tools">
+                    <button id="photoBtn" class="tool-btn" title="Send Photo">
+                        <i class="fas fa-camera"></i>
+                    </button>
+                    <button id="emojiBtn" class="tool-btn" title="Emoji">
+                        <i class="fas fa-smile"></i>
+                    </button>
+                    <button id="gifBtn" class="tool-btn" title="GIF">
+                        <i class="fas fa-file-image"></i>
+                    </button>
+                    <input type="file" id="photoInput" accept="image/*" style="display: none;">
+                </div>
+                
+                <div class="message-input-wrapper">
+                    <input type="text" id="messageInput" placeholder="Type your message here..." autocomplete="off">
+                    <button id="sendBtn" class="btn-send">
+                        <i class="fas fa-paper-plane"></i> Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Emoji Picker -->
+    <div class="emoji-picker" id="emojiPicker">
+        <div class="emoji-header">
+            <span>Select Emoji</span>
+            <button id="closeEmojiBtn">&times;</button>
+        </div>
+        <div class="emoji-grid">
+            <!-- Emojis will be added by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Photo Viewer Modal -->
+    <div class="photo-modal" id="photoModal">
+        <div class="photo-modal-content">
+            <span class="close-photo">&times;</span>
+            <div class="photo-controls">
+                <button id="zoomInBtn" class="photo-btn"><i class="fas fa-search-plus"></i></button>
+                <button id="zoomOutBtn" class="photo-btn"><i class="fas fa-search-minus"></i></button>
+                <button id="resetZoomBtn" class="photo-btn"><i class="fas fa-sync-alt"></i></button>
+                <button id="downloadPhotoBtn" class="photo-btn"><i class="fas fa-download"></i></button>
+            </div>
+            <img id="viewedPhoto" src="" alt="Full size photo">
+            <div class="photo-info" id="photoInfo"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
