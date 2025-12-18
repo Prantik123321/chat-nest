@@ -10,22 +10,28 @@
 </head>
 <body>
     <!-- Name Entry Modal -->
-    <div id="nameModal" class="modal">
+    <div id="nameModal" class="modal show">
         <div class="modal-content">
             <div class="logo">
                 <i class="fas fa-dove"></i>
                 <h1>Chat Nest</h1>
             </div>
             <p class="tagline">Where conversations take flight</p>
-            <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="20" autocomplete="off">
+            <div class="input-group">
+                <input type="text" id="usernameInput" placeholder="Enter your name (2-20 characters)" maxlength="20" autocomplete="off">
+                <div class="error-message" id="usernameError"></div>
+            </div>
             <button id="joinChatBtn" class="btn-primary">
                 <i class="fas fa-sign-in-alt"></i> Enter Chat Room
             </button>
+            <div class="server-status">
+                <span id="connectionStatus">Connecting to server...</span>
+            </div>
         </div>
     </div>
 
     <!-- Main Chat Container -->
-    <div class="container">
+    <div class="container" id="mainContainer">
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
@@ -37,11 +43,17 @@
                     <span class="online-dot"></span>
                     <span id="onlineCount">0</span> online
                 </div>
+                <div class="connection-status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="socketStatus">Connected</span>
+                </div>
             </div>
 
             <div class="active-users">
-                <h3><i class="fas fa-users"></i> Active Users</h3>
-                <ul id="userList"></ul>
+                <h3><i class="fas fa-users"></i> Active Users (<span id="userCount">0</span>)</h3>
+                <ul id="userList">
+                    <li class="empty-users">No users online</li>
+                </ul>
             </div>
 
             <div class="features">
@@ -52,7 +64,17 @@
                     <li><i class="fas fa-smile"></i> Emoji & GIF support</li>
                     <li><i class="fas fa-search-plus"></i> Zoom photos</li>
                     <li><i class="fas fa-bolt"></i> No downloads needed</li>
+                    <li><i class="fas fa-mobile-alt"></i> Mobile friendly</li>
                 </ul>
+            </div>
+            
+            <div class="quick-actions">
+                <button id="clearChatBtn" class="btn-secondary">
+                    <i class="fas fa-trash"></i> Clear Chat
+                </button>
+                <button id="refreshUsersBtn" class="btn-secondary">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
             </div>
         </div>
 
@@ -61,22 +83,36 @@
             <div class="chat-header">
                 <div class="room-info">
                     <h2><i class="fas fa-comments"></i> Main Chat Room</h2>
-                    <p>Welcome to Chat Nest! Start chatting with everyone.</p>
+                    <p id="roomDescription">Welcome to Chat Nest! Start chatting with everyone.</p>
                 </div>
                 <div class="user-info">
-                    <span id="currentUser"></span>
+                    <div class="user-badge">
+                        <i class="fas fa-user"></i>
+                        <span id="currentUser">Guest</span>
+                    </div>
                     <button id="leaveChatBtn" class="btn-secondary">
-                        <i class="fas fa-sign-out-alt"></i> Leave
+                        <i class="fas fa-sign-out-alt"></i> Leave Room
                     </button>
                 </div>
             </div>
 
             <div class="messages-container" id="messagesContainer">
-                <!-- Messages will appear here -->
+                <!-- Welcome message -->
+                <div class="system-message">
+                    <div class="message-content">
+                        <i class="fas fa-info-circle"></i>
+                        Welcome to Chat Nest! Messages will appear here.
+                    </div>
+                </div>
             </div>
 
             <!-- Typing Indicator -->
-            <div class="typing-indicator" id="typingIndicator"></div>
+            <div class="typing-indicator" id="typingIndicator" style="display: none;">
+                <div class="typing-dots">
+                    <span></span><span></span><span></span>
+                </div>
+                <span id="typingText"></span>
+            </div>
 
             <!-- Message Input Area -->
             <div class="input-area">
@@ -87,16 +123,27 @@
                     <button id="emojiBtn" class="tool-btn" title="Emoji">
                         <i class="fas fa-smile"></i>
                     </button>
-                    <button id="gifBtn" class="tool-btn" title="GIF">
+                    <button id="gifBtn" class="tool-btn" title="Send GIF URL">
                         <i class="fas fa-file-image"></i>
+                    </button>
+                    <button id="formatBtn" class="tool-btn" title="Formatting">
+                        <i class="fas fa-bold"></i>
                     </button>
                     <input type="file" id="photoInput" accept="image/*" style="display: none;">
                 </div>
                 
                 <div class="message-input-wrapper">
-                    <input type="text" id="messageInput" placeholder="Type your message here..." autocomplete="off">
-                    <button id="sendBtn" class="btn-send">
+                    <input type="text" id="messageInput" placeholder="Type your message here..." autocomplete="off" disabled>
+                    <button id="sendBtn" class="btn-send" disabled>
                         <i class="fas fa-paper-plane"></i> Send
+                    </button>
+                </div>
+                
+                <div class="file-info" id="fileInfo" style="display: none;">
+                    <i class="fas fa-image"></i>
+                    <span id="fileName">No file selected</span>
+                    <button id="cancelUploadBtn" class="btn-small">
+                        <i class="fas fa-times"></i>
                     </button>
                 </div>
             </div>
@@ -109,7 +156,7 @@
             <span>Select Emoji</span>
             <button id="closeEmojiBtn">&times;</button>
         </div>
-        <div class="emoji-grid">
+        <div class="emoji-grid" id="emojiGrid">
             <!-- Emojis will be added by JavaScript -->
         </div>
     </div>
@@ -119,13 +166,44 @@
         <div class="photo-modal-content">
             <span class="close-photo">&times;</span>
             <div class="photo-controls">
-                <button id="zoomInBtn" class="photo-btn"><i class="fas fa-search-plus"></i></button>
-                <button id="zoomOutBtn" class="photo-btn"><i class="fas fa-search-minus"></i></button>
-                <button id="resetZoomBtn" class="photo-btn"><i class="fas fa-sync-alt"></i></button>
-                <button id="downloadPhotoBtn" class="photo-btn"><i class="fas fa-download"></i></button>
+                <button id="zoomInBtn" class="photo-btn" title="Zoom In">
+                    <i class="fas fa-search-plus"></i>
+                </button>
+                <button id="zoomOutBtn" class="photo-btn" title="Zoom Out">
+                    <i class="fas fa-search-minus"></i>
+                </button>
+                <button id="resetZoomBtn" class="photo-btn" title="Reset Zoom">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <button id="downloadPhotoBtn" class="photo-btn" title="Download">
+                    <i class="fas fa-download"></i>
+                </button>
+                <button id="rotatePhotoBtn" class="photo-btn" title="Rotate">
+                    <i class="fas fa-redo"></i>
+                </button>
             </div>
-            <img id="viewedPhoto" src="" alt="Full size photo">
+            <div class="photo-container">
+                <img id="viewedPhoto" src="" alt="Full size photo">
+            </div>
             <div class="photo-info" id="photoInfo"></div>
+        </div>
+    </div>
+
+    <!-- GIF Modal -->
+    <div class="gif-modal" id="gifModal">
+        <div class="gif-modal-content">
+            <span class="close-gif">&times;</span>
+            <h3>Send GIF</h3>
+            <input type="text" id="gifUrlInput" placeholder="Paste GIF URL here (Giphy, Tenor, etc.)">
+            <div class="gif-examples">
+                <p>Popular GIF sites:</p>
+                <ul>
+                    <li><a href="https://giphy.com" target="_blank">Giphy</a></li>
+                    <li><a href="https://tenor.com" target="_blank">Tenor</a></li>
+                    <li><a href="https://gifer.com" target="_blank">Gifer</a></li>
+                </ul>
+            </div>
+            <button id="sendGifBtn" class="btn-primary">Send GIF</button>
         </div>
     </div>
 
