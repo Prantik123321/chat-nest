@@ -1,210 +1,97 @@
+import os
+import json
+import uuid
+import base64
+from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_socketio import SocketIO, emit, join_room
-from flask_cors import CORS
-import os
-from datetime import datetime
-import base64
-import uuid
-import json
+import eventlet
+eventlet.monkey_patch()
 
-# Initialize Flask app
-app = Flask(__name__, static_folder='static', template_folder='templates')
-CORS(app)  # Enable CORS for all routes
-
-# Configure secret key for session management
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'chatnest-prod-secret-2024')
-
-# Initialize SocketIO with async_mode
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
-# Store active users and messages (in production, use Redis or database)
+# Store active users and messages (in production, use Redis)
 active_users = {}
 chat_messages = []
-MAX_MESSAGES = 1000  # Limit messages in memory
+MAX_MESSAGES = 1000
+
+# Ensure uploads directory exists
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route('/')
 def index():
-    """Serve the main chat interface"""
     return render_template('index.html')
+
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
 
 @app.route('/health')
 def health_check():
-    """Health check endpoint for Render"""
     return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
 
-@app.route('/static/<path:filename>')
-def serve_static(filename):
-    """Serve static files"""
-    return send_from_directory(app.static_folder, filename)
+@app.route('/uploads/<filename>')
+def serve_upload(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
-@app.route('/save_photo', methods=['POST'])
+@app.route('/api/save_photo', methods=['POST'])
 def save_photo():
-    """Handle photo uploads"""
     try:
         data = request.get_json()
         if not data or 'photo' not in data:
             return jsonify({'success': False, 'error': 'No photo data provided'}), 400
         
         # Extract base64 data
-        if 'base64,' in data['photo']:
-            photo_data = data['photo'].split('base64,')[1]
+        if 'data:image' in data['photo']:
+            header, encoded = data['photo'].split(',', 1)
+            photo_data = base64.b64decode(encoded)
         else:
-            photo_data = data['photo']
+            photo_data = base64.b64decode(data['photo'])
         
         # Generate unique filename
-        photo_name = f"photo_{uuid.uuid4().hex[:8]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        filename = f"photo_{uuid.uuid4().hex[:8]}_{int(datetime.now().timestamp())}.png"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
         
-        # In a production environment, you would save to cloud storage (S3, etc.)
-        # For now, we'll just return success with the data
+        # Save file
+        with open(filepath, 'wb') as f:
+            f.write(photo_data)
+        
         return jsonify({
             'success': True,
-            'photo_url': f"data:image/png;base64,{photo_data}",
-            'photo_name': photo_name,
-            'timestamp': datetime.now().isoformat()
+            'photo_url': f'/uploads/{filename}',
+            'filename': filename
         })
+    except Exception as e:
+        app.logger.error(f"Error saving photo: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/cleanup', methods=['POST'])
+def cleanup():
+    """Cleanup old files (optional, can be scheduled)"""
+    try:
+        cutoff = datetime.now().timestamp() - (24 * 3600)  # 24 hours ago
+        deleted = 0
+        
+        for filename in os.listdir(UPLOAD_FOLDER):
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            if os.path.getctime(filepath) < cutoff:
+                os.remove(filepath)
+                deleted += 1
+        
+        return jsonify({'success': True, 'deleted': deleted})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# SocketIO Event Handlers
 @socketio.on('connect')
 def handle_connect():
-    """Handle new client connection"""
-    print(f'Client connected: {request.sid}')
-    emit('connection_established', {'message': 'Connected to Chat Nest'})
+    emit('connection_response', {'status': 'connected', 'id': request.sid})
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    """Handle client disconnection"""
-    user_id = request.sid
-    if user_id in active_users:
-        username = active_users[user_id]
-        user_data = active_users.pop(user_id)
-        
-        emit('user_left', {
-            'username': username,
-            'user_id': user_id,
-            'timestamp': datetime.now().strftime('%H:%M:%S')
-        }, broadcast=True)
-        
-        emit('update_users', {
-            'users': list(active_users.values()),
-            'count': len(active_users)
-        }, broadcast=True)
-        
-        print(f'User disconnected: {username} ({user_id})')
-
-@socketio.on('join')
-def handle_join(data):
-    """Handle user joining the chat"""
-    try:
-        username = data.get('username', '').strip()
-        if not username or len(username) < 2:
-            emit('join_error', {'error': 'Username must be at least 2 characters'})
-            return
-        
-        if len(username) > 20:
-            emit('join_error', {'error': 'Username must be 20 characters or less'})
-            return
-        
-        user_id = request.sid
-        
-        # Check if username already exists
-        if username in [user['username'] for user in active_users.values()]:
-            emit('join_error', {'error': 'Username already taken'})
-            return
-        
-        # Store user information
-        active_users[user_id] = {
-            'username': username,
-            'joined_at': datetime.now().isoformat(),
-            'user_id': user_id
-        }
-        
-        join_room('main_room')
-        
-        # Notify everyone about new user
-        emit('user_joined', {
-            'username': username,
-            'user_id': user_id,
-            'timestamp': datetime.now().strftime('%H:%M:%S')
-        }, broadcast=True)
-        
-        # Send updated user list to everyone
-        emit('update_users', {
-            'users': [user['username'] for user in active_users.values()],
-            'count': len(active_users)
-        }, broadcast=True)
-        
-        # Send last 50 messages to new user
-        emit('message_history', {
-            'messages': chat_messages[-50:] if chat_messages else []
-        })
-        
-        print(f'User joined: {username} ({user_id})')
-        
-    except Exception as e:
-        emit('join_error', {'error': f'Error joining chat: {str(e)}'})
-
-@socketio.on('send_message')
-def handle_message(data):
-    """Handle new chat messages"""
-    try:
-        message = data.get('message', '').strip()
-        message_type = data.get('type', 'text')
-        username = data.get('username', '')
-        
-        if not message or not username:
-            return
-        
-        user_id = request.sid
-        if user_id not in active_users:
-            return
-        
-        # Create message object
-        message_data = {
-            'id': str(uuid.uuid4()),
-            'username': username,
-            'user_id': user_id,
-            'message': message,
-            'type': message_type,
-            'timestamp': datetime.now().strftime('%H:%M %p'),
-            'full_timestamp': datetime.now().isoformat()
-        }
-        
-        # Add photo URL if present
-        if message_type == 'photo' and 'photo_url' in data:
-            message_data['photo_url'] = data['photo_url']
-        
-        # Store message (with limit)
-        chat_messages.append(message_data)
-        if len(chat_messages) > MAX_MESSAGES:
-            chat_messages.pop(0)
-        
-        # Broadcast to all clients
-        emit('new_message', message_data, broadcast=True, room='main_room')
-        
-    except Exception as e:
-        print(f'Error handling message: {e}')
-
-@socketio.on('typing')
-def handle_typing(data):
-    """Handle typing indicators"""
-    try:
-        username = data.get('username', '')
-        is_typing = data.get('is_typing', False)
-        
-        if username:
-            emit('user_typing', {
-                'username': username,
-                'is_typing': is_typing,
-                'user_id': request.sid
-            }, broadcast=True, include_self=False)
-    except Exception as e:
-        print(f'Error handling typing: {e}')
-
-@socketio.on('leave')
-def handle_leave(data):
-    """Handle user leaving chat"""
     user_id = request.sid
     if user_id in active_users:
         username = active_users[user_id]['username']
@@ -212,29 +99,136 @@ def handle_leave(data):
         
         emit('user_left', {
             'username': username,
-            'user_id': user_id,
-            'timestamp': datetime.now().strftime('%H:%M:%S')
+            'timestamp': datetime.now().strftime('%H:%M:%S'),
+            'userCount': len(active_users)
         }, broadcast=True)
         
-        emit('update_users', {
-            'users': [user['username'] for user in active_users.values()],
-            'count': len(active_users)
-        }, broadcast=True)
+        emit('update_users', get_active_users_list(), broadcast=True)
 
-# Production startup
+@socketio.on('join')
+def handle_join(data):
+    try:
+        username = data.get('username', '').strip()
+        if not username or len(username) < 2 or len(username) > 20:
+            emit('join_error', {'error': 'Username must be 2-20 characters'})
+            return
+        
+        # Check if username already exists
+        if any(user['username'].lower() == username.lower() for user in active_users.values()):
+            emit('join_error', {'error': 'Username already taken'})
+            return
+        
+        user_id = request.sid
+        active_users[user_id] = {
+            'username': username,
+            'joined_at': datetime.now().isoformat(),
+            'last_active': datetime.now().isoformat()
+        }
+        
+        join_room('main_room')
+        
+        # Send welcome message
+        emit('user_joined', {
+            'username': username,
+            'timestamp': datetime.now().strftime('%H:%M:%S'),
+            'userCount': len(active_users)
+        }, broadcast=True)
+        
+        # Update user list for everyone
+        emit('update_users', get_active_users_list(), broadcast=True)
+        
+        # Send last 50 messages to new user
+        emit('message_history', chat_messages[-50:])
+        
+        # Confirm join to user
+        emit('join_success', {
+            'username': username,
+            'userCount': len(active_users)
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Join error: {str(e)}")
+        emit('join_error', {'error': 'Internal server error'})
+
+@socketio.on('send_message')
+def handle_message(data):
+    try:
+        username = active_users.get(request.sid, {}).get('username', 'Unknown')
+        message = data.get('message', '').strip()
+        msg_type = data.get('type', 'text')
+        
+        if not message and msg_type == 'text':
+            return
+        
+        # Update user's last active time
+        if request.sid in active_users:
+            active_users[request.sid]['last_active'] = datetime.now().isoformat()
+        
+        message_id = str(uuid.uuid4())
+        message_data = {
+            'id': message_id,
+            'username': username,
+            'message': message,
+            'type': msg_type,
+            'timestamp': datetime.now().strftime('%H:%M %p'),
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'photo_url': data.get('photo_url', '')
+        }
+        
+        # Store message
+        chat_messages.append(message_data)
+        if len(chat_messages) > MAX_MESSAGES:
+            chat_messages.pop(0)
+        
+        # Broadcast to all
+        emit('new_message', message_data, broadcast=True)
+        
+    except Exception as e:
+        app.logger.error(f"Message error: {str(e)}")
+
+@socketio.on('typing')
+def handle_typing(data):
+    try:
+        username = active_users.get(request.sid, {}).get('username', '')
+        if username:
+            emit('user_typing', {
+                'username': username,
+                'is_typing': data.get('is_typing', False)
+            }, broadcast=True, include_self=False)
+    except Exception as e:
+        app.logger.error(f"Typing error: {str(e)}")
+
+@socketio.on('request_users')
+def handle_users_request():
+    emit('update_users', get_active_users_list())
+
+def get_active_users_list():
+    """Get list of active users for display"""
+    return [
+        {
+            'username': user['username'],
+            'joined_at': user['joined_at'][11:16]  # Just time
+        }
+        for user in active_users.values()
+    ]
+
+# Error handlers
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({'error': 'Internal server error'}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    
-    print(f"🚀 Starting Chat Nest server on port {port}")
-    print(f"📡 Debug mode: {debug}")
-    print(f"🔗 Server ready: http://0.0.0.0:{port}")
+    debug_mode = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     
     socketio.run(
         app,
         host='0.0.0.0',
         port=port,
-        debug=debug,
-        log_output=True,
-        allow_unsafe_werkzeug=False  # Safe for production
+        debug=debug_mode,
+        log_output=True
     )
